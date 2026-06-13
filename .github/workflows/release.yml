@@ -105,7 +105,7 @@ jobs:
           sbom-path: dist/SBOM.spdx.json
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@v4.1.2
 
       # Keyless (Sigstore) signature over the checksum manifest, verifiable
       # without GitHub's attestation API. Covers every artifact via SHA256SUMS.
