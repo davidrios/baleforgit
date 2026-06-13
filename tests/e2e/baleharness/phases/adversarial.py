@@ -7,7 +7,6 @@ import hmac
 import json
 import os
 import secrets
-import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -131,28 +130,6 @@ def phase_adversarial_wrong_token(
     )
 
 
-def _container_writer(server: ServerHandle, rel: str) -> Callable[[bytes], None]:
-    # The entrypoint chowns /data to the unprivileged `bale` user, so under
-    # rootless podman the xorb files land under a host subuid the harness user
-    # can read but not write (and under rootful podman, under in-container uid
-    # 10001). Push the corrupt/restore bytes back in through the container,
-    # whose default exec user is root and writes regardless of the file owner.
-    container_path = "/data/" + rel.replace(os.sep, "/")
-
-    def write(data: bytes) -> None:
-        cmd = server.rt.cmd(
-            "exec", "-i", server.name, "sh", "-c", 'cat > "$0"', container_path
-        )
-        completed = subprocess.run(cmd, input=data, capture_output=True)
-        if completed.returncode != 0:
-            raise TestFailure(
-                f"failed to write {container_path} in container: "
-                + completed.stderr.decode("utf-8", "replace")
-            )
-
-    return write
-
-
 def _s3_writer(minio, key: str) -> Callable[[bytes], None]:
     return lambda data: minio.put_object(key, data)
 
@@ -196,7 +173,8 @@ def phase_adversarial_tampered_xorb(
                 p = Path(cur) / name
                 if p.stat().st_size > 0:
                     rel = str(p.relative_to(server.data_root))
-                    victims.append((rel, p.read_bytes(), _container_writer(server, rel)))
+                    writer = lambda data, p=p: server.write_data_file(p, data)
+                    victims.append((rel, server.read_data_file(p), writer))
         if not victims:
             raise TestFailure("no xorb on disk to tamper with")
 
@@ -723,7 +701,7 @@ def _one_stored_xorb_body(server: ServerHandle) -> bytes:
         for name in names:
             p = Path(cur) / name
             if p.stat().st_size > 0:
-                return p.read_bytes()
+                return server.read_data_file(p)
     raise TestFailure("no xorb on disk to read")
 
 
@@ -976,7 +954,7 @@ def phase_adversarial_upload_guards(
                     f"upload-guards: expected exactly 1 xorb on disk, found "
                     f"{len(xorb_files)} — range-clamp assertion is ambiguous"
                 )
-            full_xorb = xorb_files[0].read_bytes()
+            full_xorb = server.read_data_file(xorb_files[0])
             past = len(full_xorb) + 1_000_000
             clamp_x = now + 3600
 
