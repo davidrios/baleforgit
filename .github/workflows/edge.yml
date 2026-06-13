@@ -86,8 +86,7 @@ jobs:
         run: |
           cd dist
           cosign sign-blob --yes SHA256SUMS \
-            --output-signature SHA256SUMS.sig \
-            --output-certificate SHA256SUMS.pem
+            --bundle SHA256SUMS.cosign.bundle
 
       - name: Build release notes
         shell: bash
@@ -114,7 +113,7 @@ jobs:
             echo "Verify the checksum signature (cosign keyless):"
             echo '```'
             echo "cosign verify-blob SHA256SUMS \\"
-            echo "  --signature SHA256SUMS.sig --certificate SHA256SUMS.pem \\"
+            echo "  --bundle SHA256SUMS.cosign.bundle \\"
             echo "  --certificate-identity-regexp 'https://github.com/davidrios/baleforgit/.*' \\"
             echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com"
             echo '```'
