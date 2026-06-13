@@ -1,0 +1,80 @@
+[workspace]
+resolver = "2"
+exclude = [
+    "xet-core",
+]
+members = [
+    "crates/bale-server-core",
+    "crates/bale-server-wire",
+    "crates/bale-server-shard",
+    "crates/bale-server-storage-fs",
+    "crates/bale-server-storage-mem",
+    "crates/bale-server-storage-s3",
+    "crates/bale-server-meta-common",
+    "crates/bale-server-meta-sqlite",
+    "crates/bale-server-meta-postgres",
+    "crates/bale-server-authz-mem",
+    "crates/bale-server-authz-http",
+    "crates/bale-server-tokens",
+    "crates/bale-server-http",
+    "crates/bale-server-bin",
+    "crates/git-bale",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+rust-version = "1.94"
+
+[workspace.dependencies]
+anyhow = "=1.0.102"
+async-stream = "=0.3.6"
+async-trait = "=0.1.89"
+axum = { version = "=0.8.9", features = ["macros"] }
+base64 = "=0.22.1"
+blake3 = "=1.8.5"
+bytes = "=1.11.1"
+hex = "=0.4.3"
+hmac = "=0.13.0"
+http-body-util = "=0.1.3"
+jsonwebtoken = { version = "=10.4.0", default-features = false, features = ["use_pem", "rust_crypto"] }
+rand = "=0.10.1"
+reqwest = { version = "=0.13.3", default-features = false, features = ["json", "rustls", "http2", "stream"] }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.150"
+sha2 = "=0.11.0"
+sqlx = { version = "=0.9.0", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate"] }
+tempfile = "=3.27.0"
+thiserror = "=2.0.18"
+tokio = { version = "=1.52.3", features = ["full"] }
+tokio-util = { version = "=0.7.18", features = ["io"] }
+tower = "=0.5.3"
+tower-http = { version = "=0.6.11", features = ["trace"] }
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
+uuid = { version = "=1.23.1", features = ["v4"] }
+
+# Observability. The bin pulls SDK + OTLP exporter; the http crate uses only the
+# API surface so its instruments are no-ops when no provider is installed.
+opentelemetry = { version = "=0.32.0", default-features = false, features = ["trace", "metrics"] }
+opentelemetry_sdk = { version = "=0.32.1", default-features = false, features = ["trace", "metrics", "rt-tokio"] }
+# Blocking reqwest client: the SDK's BatchSpanProcessor / PeriodicReader export
+# on a dedicated non-tokio thread, where the async client panics with "no
+# reactor running". The blocking client needs no ambient runtime.
+opentelemetry-otlp = { version = "=0.32.0", default-features = false, features = ["http-proto", "reqwest-blocking-client", "reqwest-rustls", "trace", "metrics"] }
+tracing-opentelemetry = { version = "=0.33.0", default-features = false }
+
+bale-server-core = { path = "crates/bale-server-core" }
+bale-server-wire = { path = "crates/bale-server-wire" }
+bale-server-shard = { path = "crates/bale-server-shard" }
+bale-server-storage-fs = { path = "crates/bale-server-storage-fs" }
+bale-server-storage-mem = { path = "crates/bale-server-storage-mem" }
+bale-server-storage-s3 = { path = "crates/bale-server-storage-s3" }
+bale-server-meta-common = { path = "crates/bale-server-meta-common" }
+bale-server-meta-sqlite = { path = "crates/bale-server-meta-sqlite" }
+bale-server-meta-postgres = { path = "crates/bale-server-meta-postgres" }
+bale-server-authz-mem = { path = "crates/bale-server-authz-mem" }
+bale-server-authz-http = { path = "crates/bale-server-authz-http" }
+bale-server-tokens = { path = "crates/bale-server-tokens" }
+bale-server-http = { path = "crates/bale-server-http" }
