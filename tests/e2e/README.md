@@ -491,9 +491,19 @@ The container's `bale` user is UID 10001, but the bind-mounted `/data`
 on the host is owned by whichever UID created it (the test user). The
 entrypoint chowns `/data` to `bale:bale` at startup so the server can
 write. Files written by `bale` land mode 0644 by default, which the
-host user can still read for the disk-size measurements that the test
-performs from outside the container. Rootless podman's user namespace
-remapping handles the cross-UID story transparently.
+host user can still **read** for the disk-size measurements that the
+test performs from outside the container.
+
+**Writes** are the exception: under rootless podman those `bale`-owned
+files map to a host subuid (and under rootful podman to host UID 10001),
+neither writable by the harness user — so `git status` / a CI run fails
+with `PermissionError` if the harness tries to overwrite one. The only
+host-side phase that *mutates* `/data` is `tampered-xorb`; it pushes the
+corrupted (and restored) bytes back in via `podman exec … 'cat > $path'`
+(`_container_writer` in `phases/adversarial.py`), whose default exec user
+is root and writes regardless of file owner. This is location-independent
+— moving the work dir off `/tmp` does not change file ownership, so any
+new host→`/data` write must go through the container, not `open(..., 'w')`.
 
 ### Phase orchestration
 

@@ -7,6 +7,7 @@ import hmac
 import json
 import os
 import secrets
+import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -130,8 +131,26 @@ def phase_adversarial_wrong_token(
     )
 
 
-def _fs_writer(path: Path) -> Callable[[bytes], None]:
-    return lambda data: path.write_bytes(data)
+def _container_writer(server: ServerHandle, rel: str) -> Callable[[bytes], None]:
+    # The entrypoint chowns /data to the unprivileged `bale` user, so under
+    # rootless podman the xorb files land under a host subuid the harness user
+    # can read but not write (and under rootful podman, under in-container uid
+    # 10001). Push the corrupt/restore bytes back in through the container,
+    # whose default exec user is root and writes regardless of the file owner.
+    container_path = "/data/" + rel.replace(os.sep, "/")
+
+    def write(data: bytes) -> None:
+        cmd = server.rt.cmd(
+            "exec", "-i", server.name, "sh", "-c", 'cat > "$0"', container_path
+        )
+        completed = subprocess.run(cmd, input=data, capture_output=True)
+        if completed.returncode != 0:
+            raise TestFailure(
+                f"failed to write {container_path} in container: "
+                + completed.stderr.decode("utf-8", "replace")
+            )
+
+    return write
 
 
 def _s3_writer(minio, key: str) -> Callable[[bytes], None]:
@@ -146,10 +165,11 @@ def phase_adversarial_tampered_xorb(
     work_root: Path,
     rev_state: dict,
 ) -> None:
-    """Corrupt the stored xorbs (we own both the bind-mounted fs data dir and
-    the MinIO bucket), then cold-clone in a fresh worktree. The smudge must
-    NOT silently produce wrong bytes — it must either error or produce content
-    whose sha256 the test detects as wrong."""
+    """Corrupt the stored xorbs (fs files via the container — they're owned by
+    the in-container `bale` user, not the harness user — or the MinIO bucket),
+    then cold-clone in a fresh worktree. The smudge must NOT silently produce
+    wrong bytes — it must either error or produce content whose sha256 the test
+    detects as wrong."""
     # Backend-agnostic corrupt/restore. Corrupt EVERY stored xorb — flip a
     # window in the middle of each. Corrupting just one is fragile: HEAD's
     # reconstruction (rev v3 of bigfile) only reads a subset of any single
@@ -175,13 +195,8 @@ def phase_adversarial_tampered_xorb(
             for name in names:
                 p = Path(cur) / name
                 if p.stat().st_size > 0:
-                    victims.append(
-                        (
-                            str(p.relative_to(server.data_root)),
-                            p.read_bytes(),
-                            _fs_writer(p),
-                        )
-                    )
+                    rel = str(p.relative_to(server.data_root))
+                    victims.append((rel, p.read_bytes(), _container_writer(server, rel)))
         if not victims:
             raise TestFailure("no xorb on disk to tamper with")
 
